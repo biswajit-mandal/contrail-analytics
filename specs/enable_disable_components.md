@@ -121,7 +121,7 @@ Two new node types will be defined in Config Schema.
 with parent as ```global-system-config```
 
 ### 4.1.2 Changes in contrail-ansible-deployer
-Three new roles are added as discussed in [Proposed Solution](https://github.com/Juniper/contrail-analytics/specs/analytics_optional_components.md#3------proposed-solution) Section
+Three new roles are added as discussed in [Proposed Solution](https://github.com/biswajit-mandal/contrail-analytics/specs/analytics_optional_components.md#3------proposed-solution) Section
 ```
 analytics_alarm
 analytics_snmp
