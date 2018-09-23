@@ -1,7 +1,15 @@
 Optional installation of some contrail Analytics Components
 ===
 # 1.      Introduction
-Contrail ```analytics``` and ```analytics_database``` role contains multiple components. This document provides details about how to make some analytics components' installation optional.
+Contrail ```analytics``` and ```analytics_database``` role contains multiple components. This document provides details about how to make below analytics components installation optional.
+```
+alarm-gen
+kafka
+snmp-collector
+topology
+cassandra
+query-engine
+```
 
 
 # 2.      Problem Statement
@@ -13,7 +21,6 @@ Installation of below components in Contrail analytics should be optional.
 ```
 alarm-gen
 kafka
-zookeeper
 snmp-collector
 topology
 cassandra
@@ -42,29 +49,29 @@ zookeeper
 nodemgr
 ```
 
-So, to make it sync with existing approach, we are creating three additional roles to make above seven components' installation optional.
+So, to make it sync with existing approach, we are creating two additional roles to make above six components' installation optional.
 ```
 analytics_alarm
 analytics_snmp
-analytics_database
 ```
+along with ```analytics``` and ```analytics_database``` role.
 
 With the above roles, different roles with components in analytics are depicted as below:
 
 ```
-+-------------+ +-------------+
-|             | |             |
-| +---------+ | | +---------+ |
-| |nodemgr  | | | |nodemgr  | | +-------------+ +---------------+
-| +---------+ | | +---------+ | |             | |               |
++-------------+
+|             |
+| +---------+ |
+| |nodemgr  | | +-------------+ +-------------+ +---------------+
+| +---------+ | |             | |             | |               |
 | +---------+ | | +---------+ | | +---------+ | | +-----------+ |
-| |redis    | | | |alarm    | | | |nodemgr  | | | |nodemgr    | |
-| +---------+ | | +---------+ | | +---------+ | | +-----------+ |
-| +---------+ | | +---------+ | | +---------+ | | +-----------+ |
-| |api      | | | |kafka    | | | |snmp     | | | | query     | |
+| |redis    | | | |nodemgr  | | | |nodemgr  | | | |nodemgr    | |
 | +---------+ | | +---------+ | | +---------+ | | +-----------+ |
 | +---------+ | | +---------+ | | +---------+ | | +-----------+ |
-| |collector| | | |zookeeper| | | |topology | | | | cassandra | |
+| |api      | | | |alarm    | | | |snmp     | | | | query     | |
+| +---------+ | | +---------+ | | +---------+ | | +-----------+ |
+| +---------+ | | +---------+ | | +---------+ | | +-----------+ |
+| |collector| | | |kafka    | | | |topology | | | | cassandra | |
 | +---------+ | | +---------+ | | +---------+ | | +-----------+ |
 |             | |             | |             | |               |
 |  analytics  | |  analytics_ | | analytics_  | | analytics_    |
@@ -72,15 +79,17 @@ With the above roles, different roles with components in analytics are depicted 
 +-------------+ +-------------+ +-------------+ +---------------+
 ```
 
-```analytics_alarm``` role implies ```alarm```, ```kafka``` and ```zookeeper``` components
+```analytics_alarm``` role implies ```alarm```, ```kafka``` components
 ```analytics_snmp``` role implies analytics ```snmp-collector``` and ```topology``` components
 ```analytics_database``` role implies analytics ```query``` and ```cassandra``` components
+
+```zookeeper``` component is removed from ```analytics_database``` role.
 
 # 3.1    Alternatives considered
 In stead of role, we could have used some boolean flag to enable/disable some components. But this will deviate from existing approach in ansible as well as other deployments (openshift, helm, openshift etc). So we did not consider that approach.
 
 # 3.2    API changes
-
+The below APIs should not be visible in ```api``` if ```alarm-gen``` is not installed.
 ```
 /analytics/alarms
 /analytics/alarm-stream
@@ -121,31 +130,19 @@ Two new node types will be defined in Config Schema.
 with parent as ```global-system-config```
 
 ### 4.1.2 Changes in contrail-ansible-deployer
-Three new roles are added as discussed in [Proposed Solution](https://github.com/biswajit-mandal/contrail-analytics/blob/master/specs/enable_disable_components.md#3------proposed-solution) Section
+Two new roles are added as discussed in [Proposed Solution](https://github.com/Juniper/contrail-analytics/blob/master/specs/enable_disable_components.md#3------proposed-solution) Section
 ```
 analytics_alarm
 analytics_snmp
-analytics_database
 ```
 If any of the above role is not configured in a node, then we should not show the processes for that role in ```contrail-status```
-To do that, we have added three new environment variables in ```/etc/contrail/common.env```.
-```
-ENABLE_ANALYTICS_ALARM
-ENABLE_ANALYTICS_SNMP
-ENABLE_ANALYTICS_DATABASE
-```
-which are used to to turn on/off the display of the contrail components status in ```contrail-status```.
 
 ### 4.1.3 Changes in contrail-container-builder
-```alarm-gen```, ```api```, ```collector```, ```snmp-collector``` and ```topology``` use ```zookeeper``` from ```analytics_database```. With this change, all of them will use ```config_database``` zookeeper nodes (```ZOOKEEPER_SERVERS```)
 
-The env-file ```/etc/contrail/common.env``` is passed along with contrail-status ```docker run``` arguments
-```docker run --rm --name contrail-status -v $vol_opts --pid host --env-file /etc/contrail/common.env --net host --privileged ${CONTRAIL_STATUS_IMAGE}```
-And internally above environment variables are used to show or not show the status of these analytics components.
+```alarm-gen```, ```api```, ```collector```, ```snmp-collector```, ```topology``` and ```kafka``` use ```zookeeper``` from ```analytics_database```. With this change, all of them will use ```config_database``` zookeeper nodes (```ZOOKEEPER_SERVERS```). ```zookeeper``` component is removed from ```analytics_database``` role.
 
-If any of the above optional role is not provisioned, then corresponding analytics component related configuration should not be available in other component's individual
-configuration file.
-For ex:
+If any of the above optional role is not provisioned, then corresponding analytics component related configuration should not be available in other component's individual configuration file.
+For example:
 If ```analytics_database``` is not provisioned, then contrail-collector.conf file should not have ```DATABASE``` section.
 
 ### 4.1.4 Changes in nodemgr
@@ -157,6 +154,14 @@ ANALYTICS_ALARM_NODE_MGR
 ANALYTICS_SNMP_NODE_MGR
 ```
 
+### 4.1.5 Changes in Sandesh
+In viz.sandesh, two Object tables are created, ```ObjectAnalyticsAlarmInfo``` and ```ObjectAnalyticsSNMPInfo```
+In vns.sandesh, the Sandesh port for ```analytics-alarm-nodemgr``` and ```analytics-snmp-nodemgr``` are defined as below:
+```
+const u16 HttpPortAnalyticsAlarmNodemgr = 8113
+const u16 HttpPortAnalyticsSNMPNodemgr = 8114
+
+```
 # 5 Performance and Scaling Impact
 None
 
@@ -184,3 +189,4 @@ None
 # 10      Documentation Impact
 
 # 11      References
+
